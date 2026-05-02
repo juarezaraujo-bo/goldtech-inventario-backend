@@ -60,3 +60,15 @@ exports.login = (req, res) => {
     return res.status(500).json({ message: 'Erro interno' });
   }
 };
+
+exports.me = (req, res) => {
+  db.get("SELECT id, name, username, email, role FROM users WHERE id = ?", [req.userId], (err, user) => {
+    if (err) {
+      return res.status(500).json({ message: 'Erro no servidor' });
+    }
+    if (!user) {
+      return res.status(404).json({ message: 'Usuário não encontrado' });
+    }
+    res.status(200).json(user);
+  });
+};
