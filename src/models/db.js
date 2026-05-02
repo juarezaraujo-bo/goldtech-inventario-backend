@@ -15,6 +15,7 @@ const initDb = async () => {
     db.run(`CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
+      username TEXT UNIQUE,
       email TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
       role TEXT DEFAULT 'user'
@@ -126,8 +127,8 @@ const initDb = async () => {
 
     // Default User (Juarez Admin)
     const adminPassword = bcrypt.hashSync('Goldtech@123', 10);
-    db.run(`INSERT OR IGNORE INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`, 
-      ['Juarez (Admin)', 'juarez@goldtechnologia.com.br', adminPassword, 'admin']);
+    db.run(`INSERT OR IGNORE INTO users (name, username, email, password, role) VALUES (?, ?, ?, ?, ?)`, 
+      ['Juarez Diniz', 'juarez@goldtechnologia.com.br', 'juarez@goldtechnologia.com.br', adminPassword, 'admin']);
 
     // Remove old default admin if it exists
     db.run(`DELETE FROM users WHERE email = 'admin@goldtech.com'`);

@@ -15,31 +15,21 @@ db.serialize(() => {
   const hash = bcrypt.hashSync(ADMIN_PASS, 10);
 
   // 1. Remover o admin antigo se existir
-  db.run(`DELETE FROM users WHERE email = 'admin@goldtech.com'`, (err) => {
-    if (err) console.error('Erro ao remover admin antigo:', err.message);
-    else console.log('Admin antigo (admin@goldtech.com) removido ou inexistente.');
-  });
+  db.run(`DELETE FROM users WHERE email = 'admin@goldtech.com'`);
 
-  // 2. Criar ou Atualizar o novo admin
+  // 2. Criar ou Atualizar o novo admin (Juarez)
   db.get(`SELECT id FROM users WHERE email = ?`, [ADMIN_EMAIL], (err, row) => {
-    if (err) {
-      console.error('Erro ao buscar usuário:', err.message);
-      return;
-    }
-
     if (row) {
-      // Atualizar
-      db.run(`UPDATE users SET password = ?, role = 'admin', name = ? WHERE email = ?`, 
-        [hash, ADMIN_NAME, ADMIN_EMAIL], (err) => {
+      db.run(`UPDATE users SET name = ?, username = ?, password = ?, role = 'admin' WHERE email = ?`, 
+        [ADMIN_NAME, ADMIN_EMAIL, hash, ADMIN_EMAIL], (err) => {
           if (err) console.error('Erro ao atualizar admin:', err.message);
-          else console.log(`Usuário ${ADMIN_EMAIL} atualizado com nova senha e perfil admin.`);
+          else console.log(`Usuário ${ADMIN_EMAIL} atualizado.`);
         });
     } else {
-      // Inserir
-      db.run(`INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`,
-        [ADMIN_NAME, ADMIN_EMAIL, hash, 'admin'], (err) => {
+      db.run(`INSERT INTO users (name, username, email, password, role) VALUES (?, ?, ?, ?, ?)`,
+        [ADMIN_NAME, ADMIN_EMAIL, ADMIN_EMAIL, hash, 'admin'], (err) => {
           if (err) console.error('Erro ao criar admin:', err.message);
-          else console.log(`Novo usuário ${ADMIN_EMAIL} criado com sucesso.`);
+          else console.log(`Novo usuário ${ADMIN_EMAIL} criado.`);
         });
     }
   });

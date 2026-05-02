@@ -10,7 +10,7 @@ exports.login = (req, res) => {
         return res.status(400).json({ message: 'Email/Username and password are required' });
     }
 
-    db.get("SELECT * FROM users WHERE email = ?", [loginIdentifier], (err, user) => {
+    db.get("SELECT * FROM users WHERE email = ? OR username = ?", [loginIdentifier, loginIdentifier], (err, user) => {
         if (err) {
             return res.status(500).json({ message: 'Error on the server' });
         }
@@ -30,11 +30,13 @@ exports.login = (req, res) => {
         );
 
         res.status(200).json({
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            accessToken: token
+            token: token,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role
+            }
         });
     });
 };

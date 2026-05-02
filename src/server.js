@@ -40,6 +40,11 @@ app.use('/api/monitoring', monitoringRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/agent', agentRoutes);
 
+// 404 JSON Handler
+app.use((req, res) => {
+    res.status(404).json({ message: "Route not found" });
+});
+
 
 app.listen(PORT, () => {
     console.log(`Backend server running on http://localhost:${PORT}`);
