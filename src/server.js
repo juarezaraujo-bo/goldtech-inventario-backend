@@ -1,93 +1,96 @@
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
-const { initDb, db } = require('./models/db');
+const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 3002;
+const SECRET_KEY = process.env.JWT_SECRET || 'goldtech_secret_key';
+const DB_PATH = path.join(__dirname, 'database.sqlite');
 
-// Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
 
-// Initialize Database
-initDb();
-
-// Routes Placeholder
-app.get('/', (req, res) => {
-    res.json({ message: 'Goldtech Inventory API is running' });
+// Conexão Segura com SQLite
+const db = new sqlite3.Database(DB_PATH, (err) => {
+    if (err) console.error("Erro ao abrir banco:", err.message);
+    else console.log("Conectado ao SQLite em:", DB_PATH);
 });
 
-// Import routes
-const authRoutes = require('./routes/auth');
-const equipmentRoutes = require('./routes/equipment');
-const clientRoutes = require('./routes/client');
-const reportRoutes = require('./routes/report');
-const monitoringRoutes = require('./routes/monitoring');
-const userRoutes = require('./routes/users');
-const agentRoutes = require('./routes/agent');
+// INICIALIZAÇÃO: Cria tabela e usuário admin se não existirem
+db.serialize(() => {
+    db.run(`CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE,
+        password TEXT,
+        role TEXT
+    )`);
 
-const authController = require('./controllers/authController');
+    const salt = bcrypt.genSaltSync(10);
+    const hash = bcrypt.hashSync('admin', salt);
 
-app.use('/api/auth', authRoutes);
-app.post('/api/login', authController.login);
+    // Tenta inserir o admin, se der erro (já existe), ele ignora silenciosamente
+    db.run(`INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)`,
+        ['admin', hash, 'admin']);
+});
 
-// Rota temporária para reset de admin em produção (Segura)
-app.post('/api/admin/reset-login', (req, res) => {
-    const username = 'admin';
-    const email = 'admin@goldtech.local';
-    const name = 'Administrador';
-    const password = 'admin';
-    const role = 'admin';
+// 1. CORREÇÃO DA ROTA DE LOGIN
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
 
-    bcrypt.hash(password, 10, (err, hash) => {
-        if (err) return res.status(500).json({ success: false, message: "Erro ao gerar hash" });
+    if (!username || !password) {
+        return res.status(400).json({ error: "Usuário e senha são obrigatórios" });
+    }
 
-        db.get("SELECT id FROM users WHERE username = ?", [username], (err, row) => {
-            if (err) return res.status(500).json({ success: false, message: "Erro no banco" });
+    const query = `SELECT * FROM users WHERE username = ?`;
 
-            if (row) {
-                // Update
-                db.run(
-                    "UPDATE users SET password = ?, email = ?, name = ?, role = ? WHERE id = ?",
-                    [hash, email, name, role, row.id],
-                    (err) => {
-                        if (err) return res.status(500).json({ success: false, message: "Erro ao atualizar admin" });
-                        res.json({ success: true, message: "Admin resetado com sucesso (Update)" });
-                    }
-                );
-            } else {
-                // Insert
-                db.run(
-                    "INSERT INTO users (name, username, email, password, role) VALUES (?, ?, ?, ?, ?)",
-                    [name, username, email, hash, role],
-                    (err) => {
-                        if (err) return res.status(500).json({ success: false, message: "Erro ao criar admin" });
-                        res.json({ success: true, message: "Admin resetado com sucesso (Insert)" });
-                    }
-                );
+    db.get(query, [username], async (err, user) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: "Erro interno no servidor" });
+        }
+
+        if (!user) {
+            return res.status(401).json({ error: "Usuário não encontrado" });
+        }
+
+        try {
+            const passwordMatch = await bcrypt.compare(password, user.password);
+            if (!passwordMatch) {
+                return res.status(401).json({ error: "Senha inválida" });
             }
-        });
+
+            const token = jwt.sign(
+                { id: user.id, username: user.username, role: user.role },
+                SECRET_KEY,
+                { expiresIn: '24h' }
+            );
+
+            return res.json({
+                token,
+                user: { id: user.id, username: user.username, role: user.role }
+            });
+
+        } catch (error) {
+            return res.status(500).json({ error: "Erro ao processar login" });
+        }
     });
 });
 
-app.use('/api/equipments', equipmentRoutes);
-app.use('/api/clients', clientRoutes);
-app.use('/api/reports', reportRoutes);
-app.use('/api/monitoring', monitoringRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/agent', agentRoutes);
+// 2. CORREÇÃO DA ROTA DE RESET (Sem derrubar o servidor)
+app.post('/api/admin/reset-login', (req, res) => {
+    const salt = bcrypt.genSaltSync(10);
+    const hash = bcrypt.hashSync('admin', salt);
 
-// 404 JSON Handler
-app.use((req, res) => {
-    res.status(404).json({ message: "Route not found" });
+    db.run(`UPDATE users SET password = ? WHERE username = 'admin'`, [hash], (err) => {
+        if (err) return res.status(500).json({ error: "Erro ao resetar admin" });
+        return res.json({ message: "Senha do admin resetada para 'admin' com sucesso" });
+    });
 });
 
+// Teste de API
+app.get('/', (req, res) => res.json({ message: "Goldtech Inventory API is running" }));
 
-app.listen(PORT, () => {
-    console.log(`Backend server running on http://localhost:${PORT}`);
-});
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
