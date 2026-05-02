@@ -7,7 +7,7 @@ exports.login = (req, res) => {
     const loginIdentifier = email || username;
 
     if (!loginIdentifier || !password) {
-        return res.status(400).json({ message: 'Email/Username and password are required' });
+        return res.status(400).json({ message: 'Usuário e senha obrigatórios' });
     }
 
     db.get("SELECT * FROM users WHERE email = ? OR username = ?", [loginIdentifier, loginIdentifier], (err, user) => {
@@ -15,12 +15,23 @@ exports.login = (req, res) => {
             return res.status(500).json({ message: 'Error on the server' });
         }
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+            return res.status(404).json({ message: 'Usuário não encontrado' });
         }
 
-        const passwordIsValid = bcrypt.compareSync(password, user.password);
+        // Comparação robusta (bcrypt ou texto puro se necessário para reset)
+        let passwordIsValid = false;
+        try {
+            if (user.password.startsWith('$2') || user.password.length > 30) {
+                passwordIsValid = bcrypt.compareSync(password, user.password);
+            } else {
+                passwordIsValid = (password === user.password);
+            }
+        } catch (e) {
+            passwordIsValid = (password === user.password);
+        }
+
         if (!passwordIsValid) {
-            return res.status(401).json({ message: 'Invalid password' });
+            return res.status(401).json({ message: 'Senha inválida' });
         }
 
         const token = jwt.sign(

@@ -33,6 +33,18 @@ const authController = require('./controllers/authController');
 
 app.use('/api/auth', authRoutes);
 app.post('/api/login', authController.login);
+
+// Rota temporária para reset de admin em produção
+app.post('/api/admin/reset-login', async (req, res) => {
+    try {
+        const { resetAdmin } = require('../reset-admin');
+        const result = await resetAdmin();
+        res.json({ success: true, message: "Admin resetado", username: "admin", password: "admin", details: result });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 app.use('/api/equipments', equipmentRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/reports', reportRoutes);

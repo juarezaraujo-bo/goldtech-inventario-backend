@@ -5,37 +5,64 @@ const bcrypt = require('bcryptjs');
 const dbPath = path.resolve(__dirname, '../database/inventory.sqlite');
 const db = new sqlite3.Database(dbPath);
 
-const ADMIN_EMAIL = 'juarez@goldtechnologia.com.br';
-const ADMIN_PASS = 'Goldtech@123';
-const ADMIN_NAME = 'Juarez Diniz';
+const ADMIN_USER = {
+  username: 'admin',
+  email: 'admin@goldtech.local',
+  password: 'admin', // Texto puro para compatibilidade imediata ou hash
+  name: 'Administrador',
+  role: 'admin'
+};
 
-console.log('--- RESET ADMIN SCRIPT ---');
+function resetAdmin() {
+  return new Promise((resolve, reject) => {
+    db.serialize(() => {
+      // Garantir tabela
+      db.run(`CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        username TEXT UNIQUE,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        role TEXT DEFAULT 'user'
+      )`);
 
-db.serialize(() => {
-  const hash = bcrypt.hashSync(ADMIN_PASS, 10);
+      const hash = bcrypt.hashSync(ADMIN_USER.password, 10);
 
-  // 1. Remover o admin antigo se existir
-  db.run(`DELETE FROM users WHERE email = 'admin@goldtech.com'`);
-
-  // 2. Criar ou Atualizar o novo admin (Juarez)
-  db.get(`SELECT id FROM users WHERE email = ?`, [ADMIN_EMAIL], (err, row) => {
-    if (row) {
-      db.run(`UPDATE users SET name = ?, username = ?, password = ?, role = 'admin' WHERE email = ?`, 
-        [ADMIN_NAME, ADMIN_EMAIL, hash, ADMIN_EMAIL], (err) => {
-          if (err) console.error('Erro ao atualizar admin:', err.message);
-          else console.log(`Usuário ${ADMIN_EMAIL} atualizado.`);
-        });
-    } else {
-      db.run(`INSERT INTO users (name, username, email, password, role) VALUES (?, ?, ?, ?, ?)`,
-        [ADMIN_NAME, ADMIN_EMAIL, ADMIN_EMAIL, hash, 'admin'], (err) => {
-          if (err) console.error('Erro ao criar admin:', err.message);
-          else console.log(`Novo usuário ${ADMIN_EMAIL} criado.`);
-        });
-    }
+      // Tentar atualizar
+      db.run(`UPDATE users SET password = ?, name = ?, role = ?, email = ? WHERE username = ?`,
+        [hash, ADMIN_USER.name, ADMIN_USER.role, ADMIN_USER.email, ADMIN_USER.username],
+        function(err) {
+          if (err) return reject(err);
+          
+          if (this.changes === 0) {
+            // Se não atualizou nada, inserir
+            db.run(`INSERT INTO users (name, username, email, password, role) VALUES (?, ?, ?, ?, ?)`,
+              [ADMIN_USER.name, ADMIN_USER.username, ADMIN_USER.email, hash, ADMIN_USER.role],
+              function(err2) {
+                if (err2) return reject(err2);
+                resolve('Usuário inserido');
+              }
+            );
+          } else {
+            resolve('Usuário atualizado');
+          }
+        }
+      );
+    });
   });
-});
+}
 
-setTimeout(() => {
-  db.close();
-  console.log('Script finalizado.');
-}, 2000);
+if (require.main === module) {
+  console.log('--- RESET ADMIN ---');
+  resetAdmin()
+    .then(msg => {
+      console.log('Sucesso:', msg);
+      db.close();
+    })
+    .catch(err => {
+      console.error('Erro:', err.message);
+      db.close();
+    });
+}
+
+module.exports = { resetAdmin };
