@@ -1,74 +1,76 @@
 const bcrypt = require('bcryptjs');
 const { db } = require('../models/db');
 
-// GET /api/users — lista todos os usuários (sem senha)
 exports.getAll = (req, res) => {
-  db.all("SELECT id, name, email, role FROM users ORDER BY id ASC", [], (err, rows) => {
+  db.all("SELECT id, name, username, email, role FROM users ORDER BY id ASC", [], (err, rows) => {
     if (err) return res.status(500).json({ message: err.message });
     res.json(rows);
   });
 };
 
-// POST /api/users — cria novo usuário (apenas admin)
 exports.create = (req, res) => {
   const { name, email, password, role } = req.body;
 
   if (!name || !email || !password) {
-    return res.status(400).json({ message: 'Nome, email e senha são obrigatórios.' });
+    return res.status(400).json({ message: 'Nome, email e senha sao obrigatorios.' });
   }
 
+  if (password.length < 6) {
+    return res.status(400).json({ message: 'A senha deve ter pelo menos 6 caracteres.' });
+  }
+
+  const username = email.trim().toLowerCase();
   const hashedPassword = bcrypt.hashSync(password, 10);
   const userRole = role === 'admin' ? 'admin' : 'user';
 
   db.run(
-    "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
-    [name, email, hashedPassword, userRole],
+    "INSERT INTO users (name, username, email, password, role) VALUES (?, ?, ?, ?, ?)",
+    [name, username, username, hashedPassword, userRole],
     function (err) {
       if (err) {
         if (err.message.includes('UNIQUE constraint failed')) {
-          return res.status(400).json({ message: 'Este e-mail já está em uso.' });
+          return res.status(400).json({ message: 'Este e-mail/usuario ja esta em uso.' });
         }
         return res.status(500).json({ message: err.message });
       }
-      res.status(201).json({ success: true, id: this.lastID, name, email, role: userRole });
+      res.status(201).json({ success: true, id: this.lastID, name, username, email: username, role: userRole });
     }
   );
 };
 
-// PUT /api/users/:id — edita nome/email/role (apenas admin)
 exports.update = (req, res) => {
   const { id } = req.params;
   const { name, email, role } = req.body;
 
   if (!name || !email) {
-    return res.status(400).json({ message: 'Nome e e-mail são obrigatórios.' });
+    return res.status(400).json({ message: 'Nome e e-mail sao obrigatorios.' });
   }
 
+  const username = email.trim().toLowerCase();
   const userRole = role === 'admin' ? 'admin' : 'user';
 
   db.run(
-    "UPDATE users SET name = ?, email = ?, role = ? WHERE id = ?",
-    [name, email, userRole, id],
+    "UPDATE users SET name = ?, username = ?, email = ?, role = ? WHERE id = ?",
+    [name, username, username, userRole, id],
     function (err) {
       if (err) {
         if (err.message.includes('UNIQUE constraint failed')) {
-          return res.status(400).json({ message: 'Este e-mail já está em uso.' });
+          return res.status(400).json({ message: 'Este e-mail/usuario ja esta em uso.' });
         }
         return res.status(500).json({ message: err.message });
       }
-      if (this.changes === 0) return res.status(404).json({ message: 'Usuário não encontrado.' });
-      res.json({ success: true, message: 'Usuário atualizado.' });
+      if (this.changes === 0) return res.status(404).json({ message: 'Usuario nao encontrado.' });
+      res.json({ success: true, message: 'Usuario atualizado.' });
     }
   );
 };
 
-// PUT /api/users/change-password — altera senha (usuário autenticado altera a própria)
 exports.changePassword = (req, res) => {
   const { current_password, new_password } = req.body;
-  const userId = req.userId; // vem do authMiddleware
+  const userId = req.userId;
 
   if (!current_password || !new_password) {
-    return res.status(400).json({ message: 'Senha atual e nova senha são obrigatórias.' });
+    return res.status(400).json({ message: 'Senha atual e nova senha sao obrigatorias.' });
   }
 
   if (new_password.length < 6) {
@@ -77,7 +79,7 @@ exports.changePassword = (req, res) => {
 
   db.get("SELECT * FROM users WHERE id = ?", [userId], (err, user) => {
     if (err) return res.status(500).json({ message: err.message });
-    if (!user) return res.status(404).json({ message: 'Usuário não encontrado.' });
+    if (!user) return res.status(404).json({ message: 'Usuario nao encontrado.' });
 
     const valid = bcrypt.compareSync(current_password, user.password);
     if (!valid) {
@@ -92,17 +94,36 @@ exports.changePassword = (req, res) => {
   });
 };
 
-// DELETE /api/users/:id — remove usuário (apenas admin, não pode se auto-deletar)
+exports.setPassword = (req, res) => {
+  const { id } = req.params;
+  const { new_password } = req.body;
+
+  if (!new_password) {
+    return res.status(400).json({ message: 'Nova senha e obrigatoria.' });
+  }
+
+  if (new_password.length < 6) {
+    return res.status(400).json({ message: 'A nova senha deve ter pelo menos 6 caracteres.' });
+  }
+
+  const hashedNew = bcrypt.hashSync(new_password, 10);
+  db.run("UPDATE users SET password = ? WHERE id = ?", [hashedNew, id], function (err) {
+    if (err) return res.status(500).json({ message: err.message });
+    if (this.changes === 0) return res.status(404).json({ message: 'Usuario nao encontrado.' });
+    res.json({ success: true, message: 'Senha redefinida com sucesso.' });
+  });
+};
+
 exports.remove = (req, res) => {
   const { id } = req.params;
 
   if (Number(id) === req.userId) {
-    return res.status(400).json({ message: 'Você não pode excluir seu próprio usuário.' });
+    return res.status(400).json({ message: 'Voce nao pode excluir seu proprio usuario.' });
   }
 
   db.run("DELETE FROM users WHERE id = ?", [id], function (err) {
     if (err) return res.status(500).json({ message: err.message });
-    if (this.changes === 0) return res.status(404).json({ message: 'Usuário não encontrado.' });
-    res.json({ success: true, message: 'Usuário excluído.' });
+    if (this.changes === 0) return res.status(404).json({ message: 'Usuario nao encontrado.' });
+    res.json({ success: true, message: 'Usuario excluido.' });
   });
 };

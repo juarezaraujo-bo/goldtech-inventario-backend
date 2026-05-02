@@ -102,7 +102,7 @@ exports.getAgentPackage = (req, res) => {
     if (!client) return res.status(404).json({ message: "Cliente não encontrado" });
 
     const clientName = client.name;
-    const apiUrl = "https://goldtech-inventario-api.onrender.com";
+    const apiUrl = process.env.PUBLIC_API_URL || `${req.protocol}://${req.get('host')}`;
     const agentToken = process.env.AGENT_TOKEN || "goldtech_agent_secure_token_2026";
     
     try {
@@ -248,4 +248,3 @@ Suporte: contato@goldtech.com.br`;
     }
   });
 };
-
