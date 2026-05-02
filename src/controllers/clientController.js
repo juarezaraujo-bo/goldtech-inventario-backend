@@ -102,7 +102,7 @@ exports.getAgentPackage = (req, res) => {
     if (!client) return res.status(404).json({ message: "Cliente não encontrado" });
 
     const clientName = client.name;
-    const apiUrl = "https://goldtech-api.onrender.com";
+    const apiUrl = "https://goldtech-inventario-api.onrender.com";
     const agentToken = process.env.AGENT_TOKEN || "goldtech_agent_secure_token_2026";
     
     try {
@@ -124,18 +124,18 @@ exports.getAgentPackage = (req, res) => {
         // Substituições ultra-específicas para não quebrar a lógica interna dos scripts
         if (fileName.includes('windows-')) {
           // No script de coleta, alteramos as variáveis de configuração no topo
-          content = content.replace(/\$ApiUrl\s*=\s*"[^"]*"/, `$ApiUrl = "${apiUrl}/api/agent/inventory"`);
-          content = content.replace(/\$API_URL\s*=\s*"[^"]*"/, `$API_URL = "${apiUrl}/api/agent/performance"`);
-          content = content.replace(/\$AgentToken\s*=\s*"[^"]*"/, `$AgentToken = "${agentToken}"`);
-          content = content.replace(/\$AGENT_TOKEN\s*=\s*"[^"]*"/, `$AGENT_TOKEN = "${agentToken}"`);
-          content = content.replace(/\$Cliente\s*=\s*"[^"]*"/, `$Cliente = "${clientName}"`);
+          content = content.replace(/\$ApiUrl\s*=\s*['"][^'"]*['"]/, `$ApiUrl = "${apiUrl}/api/agent/inventory"`);
+          content = content.replace(/\$API_URL\s*=\s*['"][^'"]*['"]/, `$API_URL = "${apiUrl}/api/agent/performance"`);
+          content = content.replace(/\$AgentToken\s*=\s*['"][^'"]*['"]/, `$AgentToken = "${agentToken}"`);
+          content = content.replace(/\$AGENT_TOKEN\s*=\s*['"][^'"]*['"]/, `$AGENT_TOKEN = "${agentToken}"`);
+          content = content.replace(/\$Cliente\s*=\s*['"][^'"]*['"]/, `$Cliente = "${clientName}"`);
         }
         
         if (fileName.includes('install-')) {
           // No instalador de tarefa, alteramos APENAS os parâmetros padrão no bloco param()
-          content = content.replace(/\[string\]\$ApiUrl\s*=\s*"[^"]*"/, `[string]$ApiUrl = "${apiUrl}/api/agent/${endpoint}"`);
-          content = content.replace(/\[string\]\$AgentToken\s*=\s*"[^"]*"/, `[string]$AgentToken = "${agentToken}"`);
-          content = content.replace(/\[string\]\$Cliente\s*=\s*"[^"]*"/, `[string]$Cliente = "${clientName}"`);
+          content = content.replace(/\[string\]\$ApiUrl\s*=\s*['"][^'"]*['"]/, `[string]$ApiUrl = "${apiUrl}/api/agent/${endpoint}"`);
+          content = content.replace(/\[string\]\$AgentToken\s*=\s*['"][^'"]*['"]/, `[string]$AgentToken = "${agentToken}"`);
+          content = content.replace(/\[string\]\$Cliente\s*=\s*['"][^'"]*['"]/, `[string]$Cliente = "${clientName}"`);
         }
 
         zip.addFile(fileName, Buffer.from(content, 'utf8'));
