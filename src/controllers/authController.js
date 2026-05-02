@@ -4,17 +4,17 @@ const { db } = require('../models/db');
 
 exports.login = (req, res) => {
   try {
-    const { username, email, password } = req.body || {};
-    const loginIdentifier = username || email;
+    const { username, password } = req.body || {};
 
-    if (!loginIdentifier || !password) {
+    if (!username || !password) {
       return res.status(400).json({ message: 'Login e senha obrigatórios' });
     }
 
     db.get(
-      "SELECT * FROM users WHERE username = ? OR email = ?",
-      [loginIdentifier, loginIdentifier],
+      "SELECT * FROM users WHERE username = ?",
+      [username],
       (err, user) => {
+
         if (err) {
           console.error("DB ERROR:", err);
           return res.status(500).json({ message: 'Erro no banco' });
@@ -24,25 +24,8 @@ exports.login = (req, res) => {
           return res.status(401).json({ message: 'Usuário não encontrado' });
         }
 
-        // Fallback texto puro
-        if (!user.password.startsWith('$2') && user.password.length < 30) {
-            if (password === user.password) {
-                const token = jwt.sign(
-                    { id: user.id, role: user.role },
-                    process.env.JWT_SECRET || 'goldtech_secret_key',
-                    { expiresIn: '1d' }
-                );
-                return res.json({
-                    token,
-                    user: { id: user.id, username: user.username, email: user.email, name: user.name, role: user.role }
-                });
-            } else {
-                return res.status(401).json({ message: 'Senha inválida' });
-            }
-        }
-
-        // Comparação com bcrypt (versão callback para não travar a thread)
         bcrypt.compare(password, user.password, (err, valid) => {
+
           if (err) {
             console.error("BCRYPT ERROR:", err);
             return res.status(500).json({ message: 'Erro na senha' });
@@ -54,7 +37,7 @@ exports.login = (req, res) => {
 
           const token = jwt.sign(
             { id: user.id, role: user.role },
-            process.env.JWT_SECRET || 'goldtech_secret_key',
+            process.env.JWT_SECRET || 'secret',
             { expiresIn: '1d' }
           );
 
@@ -62,9 +45,9 @@ exports.login = (req, res) => {
             token,
             user: {
               id: user.id,
+              name: user.name,
               username: user.username,
               email: user.email,
-              name: user.name,
               role: user.role
             }
           });
@@ -73,16 +56,7 @@ exports.login = (req, res) => {
     );
 
   } catch (err) {
-    console.error("LOGIN ERROR:", err);
+    console.error("LOGIN CRASH:", err);
     return res.status(500).json({ message: 'Erro interno' });
   }
-};
-
-exports.me = (req, res) => {
-    db.get("SELECT id, name, email, role FROM users WHERE id = ?", [req.userId], (err, user) => {
-        if (err) {
-            return res.status(500).json({ message: 'Error on the server' });
-        }
-        res.status(200).json(user);
-    });
 };

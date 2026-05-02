@@ -2,7 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { initDb } = require('./models/db');
+const { initDb, db } = require('./models/db');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -35,15 +36,43 @@ const authController = require('./controllers/authController');
 app.use('/api/auth', authRoutes);
 app.post('/api/login', authController.login);
 
-// Rota temporária para reset de admin em produção
-app.post('/api/admin/reset-login', async (req, res) => {
-    try {
-        const { resetAdmin } = require('../reset-admin');
-        const result = await resetAdmin();
-        res.json({ success: true, message: "Admin resetado", username: "admin", password: "admin", details: result });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
+// Rota temporária para reset de admin em produção (Segura)
+app.post('/api/admin/reset-login', (req, res) => {
+    const username = 'admin';
+    const email = 'admin@goldtech.local';
+    const name = 'Administrador';
+    const password = 'admin';
+    const role = 'admin';
+
+    bcrypt.hash(password, 10, (err, hash) => {
+        if (err) return res.status(500).json({ success: false, message: "Erro ao gerar hash" });
+
+        db.get("SELECT id FROM users WHERE username = ?", [username], (err, row) => {
+            if (err) return res.status(500).json({ success: false, message: "Erro no banco" });
+
+            if (row) {
+                // Update
+                db.run(
+                    "UPDATE users SET password = ?, email = ?, name = ?, role = ? WHERE id = ?",
+                    [hash, email, name, role, row.id],
+                    (err) => {
+                        if (err) return res.status(500).json({ success: false, message: "Erro ao atualizar admin" });
+                        res.json({ success: true, message: "Admin resetado com sucesso (Update)" });
+                    }
+                );
+            } else {
+                // Insert
+                db.run(
+                    "INSERT INTO users (name, username, email, password, role) VALUES (?, ?, ?, ?, ?)",
+                    [name, username, email, hash, role],
+                    (err) => {
+                        if (err) return res.status(500).json({ success: false, message: "Erro ao criar admin" });
+                        res.json({ success: true, message: "Admin resetado com sucesso (Insert)" });
+                    }
+                );
+            }
+        });
+    });
 });
 
 app.use('/api/equipments', equipmentRoutes);
