@@ -17,10 +17,12 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-initDb();
-
 app.get('/', (req, res) => {
   res.json({ message: 'Goldtech API Active' });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', service: 'goldtech-inventario-api' });
 });
 
 app.use('/api', authRoutes);
@@ -41,6 +43,14 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3002;
-app.listen(PORT, () => {
-  console.log(`Servidor Goldtech rodando na porta ${PORT}`);
-});
+
+initDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Servidor Goldtech rodando na porta ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('DATABASE INIT FAILED:', err);
+    process.exit(1);
+  });

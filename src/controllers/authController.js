@@ -10,10 +10,21 @@ exports.login = (req, res) => {
       return res.status(400).json({ message: 'Login e senha obrigatórios' });
     }
 
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (settled || res.headersSent) return;
+      settled = true;
+      console.error(`LOGIN TIMEOUT: database did not answer for username=${username}`);
+      return res.status(503).json({ message: 'Banco de dados indisponivel. Tente novamente em instantes.' });
+    }, 10000);
+
     db.get(
       "SELECT * FROM users WHERE username = ?",
       [username],
       (err, user) => {
+        if (settled || res.headersSent) return;
+        settled = true;
+        clearTimeout(timeout);
 
         if (err) {
           console.error("DB ERROR:", err);
