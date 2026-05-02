@@ -130,6 +130,11 @@ const initDb = async () => {
     db.run(`INSERT OR IGNORE INTO users (name, username, email, password, role) VALUES (?, ?, ?, ?, ?)`, 
       ['Juarez Diniz', 'juarez@goldtechnologia.com.br', 'juarez@goldtechnologia.com.br', adminPassword, 'admin']);
 
+    // Admin Simples (Emergência)
+    const simpleAdminPass = bcrypt.hashSync('admin', 10);
+    db.run(`INSERT OR IGNORE INTO users (name, username, email, password, role) VALUES (?, ?, ?, ?, ?)`, 
+      ['Administrador', 'admin', 'admin@goldtech.local', simpleAdminPass, 'admin']);
+
     // Remove old default admin if it exists
     db.run(`DELETE FROM users WHERE email = 'admin@goldtech.com'`);
 
