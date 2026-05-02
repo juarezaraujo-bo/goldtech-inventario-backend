@@ -7,7 +7,7 @@ const db = new sqlite3.Database(dbPath);
 
 const ADMIN_EMAIL = 'juarez@goldtechnologia.com.br';
 const ADMIN_PASS = 'Goldtech@123';
-const ADMIN_NAME = 'Juarez (Admin)';
+const ADMIN_NAME = 'Juarez Diniz';
 
 console.log('--- RESET ADMIN SCRIPT ---');
 

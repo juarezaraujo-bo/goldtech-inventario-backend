@@ -3,13 +3,14 @@ const bcrypt = require('bcryptjs');
 const { db } = require('../models/db');
 
 exports.login = (req, res) => {
-    const { email, password } = req.body;
+    const { email, username, password } = req.body;
+    const loginIdentifier = email || username;
 
-    if (!email || !password) {
-        return res.status(400).json({ message: 'Email and password are required' });
+    if (!loginIdentifier || !password) {
+        return res.status(400).json({ message: 'Email/Username and password are required' });
     }
 
-    db.get("SELECT * FROM users WHERE email = ?", [email], (err, user) => {
+    db.get("SELECT * FROM users WHERE email = ?", [loginIdentifier], (err, user) => {
         if (err) {
             return res.status(500).json({ message: 'Error on the server' });
         }

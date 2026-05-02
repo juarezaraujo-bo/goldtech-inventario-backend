@@ -29,7 +29,10 @@ const monitoringRoutes = require('./routes/monitoring');
 const userRoutes = require('./routes/users');
 const agentRoutes = require('./routes/agent');
 
+const authController = require('./controllers/authController');
+
 app.use('/api/auth', authRoutes);
+app.post('/api/login', authController.login);
 app.use('/api/equipments', equipmentRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/reports', reportRoutes);
