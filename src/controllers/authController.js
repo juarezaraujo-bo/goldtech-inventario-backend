@@ -37,7 +37,7 @@ exports.login = (req, res) => {
 
           const token = jwt.sign(
             { id: user.id, role: user.role },
-            process.env.JWT_SECRET || 'secret',
+            process.env.JWT_SECRET || 'goldtech_secret_key',
             { expiresIn: '1d' }
           );
 

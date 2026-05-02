@@ -176,6 +176,20 @@ const initDb = async () => {
         stmt.run(2, 'Roteador Borda', 'Roteadores', 'Router', 'MikroTik', 'CCR2004', 'BF-102', 'Ativo', '10.0.0.1');
         stmt.finalize();
         console.log('Seed equipments created.');
+
+        // Seed Performance Data (para o monitoramento não iniciar vazio)
+        db.get("SELECT COUNT(*) as count FROM equipment_performance", (err, row) => {
+          if (row && row.count === 0) {
+            const perfStmt = db.prepare(`INSERT INTO equipment_performance (equipment_id, cpu_usage_percent, memory_usage_percent, disk_free_percent, disk_free_gb) VALUES (?, ?, ?, ?, ?)`);
+            // Simular dados para os equipamentos criados acima
+            perfStmt.run(1, 45.5, 60.2, 75.0, 180.0); // Notebook Direção (OK)
+            perfStmt.run(2, 92.0, 85.0, 40.0, 1600.0); // Servidor Arquivos (Alerta CPU)
+            perfStmt.run(4, 15.0, 95.0, 80.0, 400.0);  // Workstation Dev (Alerta RAM)
+            perfStmt.run(5, 10.0, 20.0, 5.0, 20.0);    // Roteador Borda (Alerta Disco)
+            perfStmt.finalize();
+            console.log('Seed performance data created.');
+          }
+        });
       }
     });
   });
