@@ -18,103 +18,63 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
     else console.log("Conectado ao SQLite em:", DB_PATH);
 });
 
-// INICIALIZAÇÃO COMPLETA: Cria tabelas e dados de teste
+// INICIALIZAÇÃO: Cria tabelas e dados de teste para o sistema não iniciar vazio
 db.serialize(() => {
-    // 1. Tabela de Usuários
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        password TEXT,
-        role TEXT
-    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, role TEXT)`);
+    db.run(`CREATE TABLE IF NOT EXISTS clientes (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT UNIQUE, email TEXT)`);
+    db.run(`CREATE TABLE IF NOT EXISTS equipamentos (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente_nome TEXT, hostname TEXT, cpu TEXT, ram TEXT, disco TEXT, status TEXT, ultima_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP)`);
 
-    // 2. Tabela de Clientes
-    db.run(`CREATE TABLE IF NOT EXISTS clientes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT UNIQUE,
-        email TEXT
-    )`);
-
-    // 3. Tabela de Equipamentos (Inventário)
-    db.run(`CREATE TABLE IF NOT EXISTS equipamentos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cliente_nome TEXT,
-        hostname TEXT,
-        cpu TEXT,
-        ram TEXT,
-        disco TEXT,
-        status TEXT,
-        ultima_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-
-    // Criar Usuário Admin padrão
     const salt = bcrypt.genSaltSync(10);
     const hash = bcrypt.hashSync('admin', salt);
     db.run(`INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)`, ['admin', hash, 'admin']);
 
-    // Criar Dados de Teste (para o sistema não iniciar vazio no Render)
     db.get("SELECT COUNT(*) as count FROM equipamentos", (err, row) => {
         if (row && row.count === 0) {
-            db.run(`INSERT OR IGNORE INTO clientes (nome, email) VALUES ('Cliente Teste Goldtech', 'contato@goldtech.com.br')`);
-
+            db.run(`INSERT OR IGNORE INTO clientes (nome, email) VALUES ('Cliente Exemplo Goldtech', 'contato@goldtech.com.br')`);
             const stmt = db.prepare(`INSERT INTO equipamentos (cliente_nome, hostname, cpu, ram, disco, status) VALUES (?, ?, ?, ?, ?, ?)`);
-            stmt.run('Cliente Teste Goldtech', 'DESKTOP-PORTARIA', 'Core i3', '8GB', '240GB SSD', 'Online');
-            stmt.run('Cliente Teste Goldtech', 'SERV-BACKUP', 'Xeon E5', '32GB', '4TB HDD', 'Offline');
+            stmt.run('Cliente Exemplo Goldtech', 'SRV-PRODUCAO', 'Intel Xeon', '32GB', '1TB SSD', 'Online');
+            stmt.run('Cliente Exemplo Goldtech', 'NOTE-JUAREZ', 'Core i7', '16GB', '512GB SSD', 'Online');
             stmt.finalize();
-            console.log("✅ Tabelas e dados de teste criados com sucesso.");
         }
     });
 });
 
-// ROTA DE LOGIN
+// --- ROTA DE LOGIN ---
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
-
-    if (!username || !password) {
-        return res.status(400).json({ error: "Usuário e senha são obrigatórios" });
-    }
-
     db.get(`SELECT * FROM users WHERE username = ?`, [username], async (err, user) => {
-        if (err) return res.status(500).json({ error: "Erro no banco de dados" });
-        if (!user) return res.status(401).json({ error: "Usuário não encontrado" });
-
-        try {
-            const passwordMatch = await bcrypt.compare(password, user.password);
-            if (!passwordMatch) return res.status(401).json({ error: "Senha inválida" });
-
-            const token = jwt.sign(
-                { id: user.id, username: user.username, role: user.role },
-                SECRET_KEY,
-                { expiresIn: '24h' }
-            );
-
-            return res.json({
-                token,
-                user: { id: user.id, username: user.username, role: user.role }
-            });
-        } catch (error) {
-            return res.status(500).json({ error: "Erro ao processar login" });
-        }
+        if (err || !user) return res.status(401).json({ error: "Usuário não encontrado" });
+        const match = await bcrypt.compare(password, user.password);
+        if (!match) return res.status(401).json({ error: "Senha inválida" });
+        const token = jwt.sign({ id: user.id, username: user.username }, SECRET_KEY, { expiresIn: '24h' });
+        res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
     });
 });
 
-// ROTA DE RESET ADMIN (Segura)
+// --- ROTAS QUE O SEU CONSOLE PEDIU (404 FIX) ---
+
+app.get('/api/clients', (req, res) => {
+    db.all("SELECT * FROM clientes", [], (err, rows) => res.json(rows || []));
+});
+
+app.get('/api/equipments', (req, res) => {
+    db.all("SELECT * FROM equipamentos", [], (err, rows) => res.json(rows || []));
+});
+
+app.get('/equipments/stats', (req, res) => {
+    db.get("SELECT count(*) as total, sum(case when status = 'Online' then 1 else 0 end) as online FROM equipamentos", [], (err, row) => {
+        res.json(row || { total: 0, online: 0 });
+    });
+});
+
+app.get('/monitoring/summary', (req, res) => {
+    db.all("SELECT * FROM equipamentos ORDER BY ultima_atualizacao DESC LIMIT 5", [], (err, rows) => res.json(rows || []));
+});
+
+// --- OUTRAS CONFIGURAÇÕES ---
 app.post('/api/admin/reset-login', (req, res) => {
-    const salt = bcrypt.genSaltSync(10);
-    const hash = bcrypt.hashSync('admin', salt);
-
-    db.run(`UPDATE users SET password = ? WHERE username = 'admin'`, [hash], (err) => {
-        if (err) return res.status(500).json({ error: "Erro ao resetar admin" });
-        return res.json({ message: "Senha do admin resetada para 'admin'" });
-    });
-});
-
-// ROTA PARA O FRONTEND BUSCAR EQUIPAMENTOS (Exemplo para popular sua tela)
-app.get('/api/equipamentos', (req, res) => {
-    db.all("SELECT * FROM equipamentos", [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+    const hash = bcrypt.hashSync('admin', bcrypt.genSaltSync(10));
+    db.run(`UPDATE users SET password = ? WHERE username = 'admin'`, [hash], (err) => res.json({ message: "Resetado" }));
 });
 
 app.get('/', (req, res) => res.json({ message: "Goldtech Inventory API is running" }));
