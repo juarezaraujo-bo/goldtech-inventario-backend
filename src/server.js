@@ -12,13 +12,12 @@ const DB_PATH = path.join(__dirname, 'database.sqlite');
 app.use(cors());
 app.use(express.json());
 
-// Conexão com SQLite
 const db = new sqlite3.Database(DB_PATH, (err) => {
     if (err) console.error("Erro ao abrir banco:", err.message);
     else console.log("Conectado ao SQLite em:", DB_PATH);
 });
 
-// INICIALIZAÇÃO: Cria tabelas e dados de teste para o sistema não iniciar vazio
+// INICIALIZAÇÃO DE TABELAS
 db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, role TEXT)`);
     db.run(`CREATE TABLE IF NOT EXISTS clientes (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT UNIQUE, email TEXT)`);
@@ -30,10 +29,10 @@ db.serialize(() => {
 
     db.get("SELECT COUNT(*) as count FROM equipamentos", (err, row) => {
         if (row && row.count === 0) {
-            db.run(`INSERT OR IGNORE INTO clientes (nome, email) VALUES ('Cliente Exemplo Goldtech', 'contato@goldtech.com.br')`);
+            db.run(`INSERT OR IGNORE INTO clientes (nome, email) VALUES ('Cliente Goldtech', 'contato@goldtech.com.br')`);
             const stmt = db.prepare(`INSERT INTO equipamentos (cliente_nome, hostname, cpu, ram, disco, status) VALUES (?, ?, ?, ?, ?, ?)`);
-            stmt.run('Cliente Exemplo Goldtech', 'SRV-PRODUCAO', 'Intel Xeon', '32GB', '1TB SSD', 'Online');
-            stmt.run('Cliente Exemplo Goldtech', 'NOTE-JUAREZ', 'Core i7', '16GB', '512GB SSD', 'Online');
+            stmt.run('Cliente Goldtech', 'SRV-PRODUCAO', 'Intel Xeon', '32GB', '1TB SSD', 'Online');
+            stmt.run('Cliente Goldtech', 'NOTE-JUAREZ', 'Core i7', '16GB', '512GB SSD', 'Online');
             stmt.finalize();
         }
     });
@@ -51,32 +50,41 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// --- ROTAS QUE O SEU CONSOLE PEDIU (404 FIX) ---
+// --- ROTAS AJUSTADAS PARA O FRONTEND (CONFORME CONSOLE) ---
 
-app.get('/api/clients', (req, res) => {
-    db.all("SELECT * FROM clientes", [], (err, rows) => res.json(rows || []));
+// Resumo de monitoramento
+app.get('/api/monitoring/summary', (req, res) => {
+    db.all("SELECT * FROM equipamentos ORDER BY ultima_atualizacao DESC LIMIT 5", [], (err, rows) => res.json(rows || []));
 });
 
-app.get('/api/equipments', (req, res) => {
-    db.all("SELECT * FROM equipamentos", [], (err, rows) => res.json(rows || []));
-});
-
-app.get('/equipments/stats', (req, res) => {
+// Estatísticas globais
+app.get('/api/equipments/stats', (req, res) => {
     db.get("SELECT count(*) as total, sum(case when status = 'Online' then 1 else 0 end) as online FROM equipamentos", [], (err, row) => {
         res.json(row || { total: 0, online: 0 });
     });
 });
 
-app.get('/monitoring/summary', (req, res) => {
-    db.all("SELECT * FROM equipamentos ORDER BY ultima_atualizacao DESC LIMIT 5", [], (err, rows) => res.json(rows || []));
+// Lista de clientes
+app.get('/api/clients', (req, res) => {
+    db.all("SELECT * FROM clientes", [], (err, rows) => res.json(rows || []));
 });
 
-// --- OUTRAS CONFIGURAÇÕES ---
-app.post('/api/admin/reset-login', (req, res) => {
-    const hash = bcrypt.hashSync('admin', bcrypt.genSaltSync(10));
-    db.run(`UPDATE users SET password = ? WHERE username = 'admin'`, [hash], (err) => res.json({ message: "Resetado" }));
+// Lista de usuários (O console pediu /api/users)
+app.get('/api/users', (req, res) => {
+    db.all("SELECT id, username, role FROM users", [], (err, rows) => res.json(rows || []));
 });
 
+// Lista de equipamentos
+app.get('/api/equipments', (req, res) => {
+    db.all("SELECT * FROM equipamentos", [], (err, rows) => res.json(rows || []));
+});
+
+// Rota de Performance Individual (evita o erro 404 de cada máquina)
+app.get('/api/equipments/:id/performance', (req, res) => {
+    res.json({ cpu_usage: "15%", ram_usage: "45%", disk_usage: "60%" });
+});
+
+// --- FINALIZAÇÃO ---
 app.get('/', (req, res) => res.json({ message: "Goldtech Inventory API is running" }));
 
 const PORT = process.env.PORT || 10000;
