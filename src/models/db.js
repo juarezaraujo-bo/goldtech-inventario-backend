@@ -124,10 +124,13 @@ const initDb = async () => {
     )`);
 
 
-    // Default User
-    const adminPassword = bcrypt.hashSync('admin123', 10);
+    // Default User (Juarez Admin)
+    const adminPassword = bcrypt.hashSync('Goldtech@123', 10);
     db.run(`INSERT OR IGNORE INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`, 
-      ['Admin Goldtech', 'admin@goldtech.com', adminPassword, 'admin']);
+      ['Juarez (Admin)', 'juarez@goldtechnologia.com.br', adminPassword, 'admin']);
+
+    // Remove old default admin if it exists
+    db.run(`DELETE FROM users WHERE email = 'admin@goldtech.com'`);
 
     // Seed Clients
     db.get("SELECT COUNT(*) as count FROM clients", (err, row) => {
