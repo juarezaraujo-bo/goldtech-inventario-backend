@@ -125,15 +125,28 @@ const initDb = async () => {
     )`);
 
 
-    // Default User (Juarez Admin)
-    const adminPassword = bcrypt.hashSync('Goldtech@123', 10);
-    db.run(`INSERT OR IGNORE INTO users (name, username, email, password, role) VALUES (?, ?, ?, ?, ?)`, 
-      ['Juarez Diniz', 'juarez@goldtechnologia.com.br', 'juarez@goldtechnologia.com.br', adminPassword, 'admin']);
+    // Default User (Juarez Admin - Async)
+    db.get('SELECT * FROM users WHERE username = "juarez@goldtechnologia.com.br"', (err, row) => {
+      if (!row) {
+        bcrypt.hash('Goldtech@123', 10, (err, hash) => {
+          db.run(`INSERT OR IGNORE INTO users (name, username, email, password, role) VALUES (?, ?, ?, ?, ?)`, 
+            ['Juarez Diniz', 'juarez@goldtechnologia.com.br', 'juarez@goldtechnologia.com.br', hash, 'admin']);
+        });
+      }
+    });
 
-    // Admin Simples (Emergência)
-    const simpleAdminPass = bcrypt.hashSync('admin', 10);
-    db.run(`INSERT OR IGNORE INTO users (name, username, email, password, role) VALUES (?, ?, ?, ?, ?)`, 
-      ['Administrador', 'admin', 'admin@goldtech.local', simpleAdminPass, 'admin']);
+    // Admin Simples (Emergência - Async)
+    db.get('SELECT * FROM users WHERE username = "admin"', (err, row) => {
+      if (!row) {
+        bcrypt.hash('admin', 10, (err, hash) => {
+          db.run(
+            "INSERT INTO users (name, username, email, password, role) VALUES (?, ?, ?, ?, ?)",
+            ["Administrador", "admin", "admin@goldtech.local", hash, "admin"]
+          );
+          console.log("ADMIN CRIADO");
+        });
+      }
+    });
 
     // Remove old default admin if it exists
     db.run(`DELETE FROM users WHERE email = 'admin@goldtech.com'`);
