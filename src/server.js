@@ -14,10 +14,9 @@ app.use(express.json());
 
 const db = new sqlite3.Database(DB_PATH, (err) => {
     if (err) console.error("Erro ao abrir banco:", err.message);
-    else console.log("Conectado ao SQLite em:", DB_PATH);
 });
 
-// INICIALIZAÇÃO DE TABELAS
+// --- ESTRUTURA DE DADOS E SEED ---
 db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, role TEXT)`);
     db.run(`CREATE TABLE IF NOT EXISTS clientes (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT UNIQUE, email TEXT)`);
@@ -29,7 +28,7 @@ db.serialize(() => {
 
     db.get("SELECT COUNT(*) as count FROM equipamentos", (err, row) => {
         if (row && row.count === 0) {
-            db.run(`INSERT OR IGNORE INTO clientes (nome, email) VALUES ('Cliente Goldtech', 'contato@goldtech.com.br')`);
+            db.run(`INSERT OR IGNORE INTO clientes (nome, email) VALUES ('Cliente Goldtech', 'suporte@goldtech.com.br')`);
             const stmt = db.prepare(`INSERT INTO equipamentos (cliente_nome, hostname, cpu, ram, disco, status) VALUES (?, ?, ?, ?, ?, ?)`);
             stmt.run('Cliente Goldtech', 'SRV-PRODUCAO', 'Intel Xeon', '32GB', '1TB SSD', 'Online');
             stmt.run('Cliente Goldtech', 'NOTE-JUAREZ', 'Core i7', '16GB', '512GB SSD', 'Online');
@@ -38,7 +37,7 @@ db.serialize(() => {
     });
 });
 
-// --- ROTA DE LOGIN ---
+// --- AUTENTICAÇÃO ---
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     db.get(`SELECT * FROM users WHERE username = ?`, [username], async (err, user) => {
@@ -50,42 +49,47 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// --- ROTAS AJUSTADAS PARA O FRONTEND (CONFORME CONSOLE) ---
+// --- ROTAS DO FRONTEND (CORREÇÃO DE 404) ---
 
-// Resumo de monitoramento
+// Resumo Geral (Cards do Dashboard)
 app.get('/api/monitoring/summary', (req, res) => {
-    db.all("SELECT * FROM equipamentos ORDER BY ultima_atualizacao DESC LIMIT 5", [], (err, rows) => res.json(rows || []));
+    db.all("SELECT * FROM equipamentos ORDER BY ultima_atualizacao DESC LIMIT 10", [], (err, rows) => res.json(rows || []));
 });
 
-// Estatísticas globais
+// Estatísticas (Gráficos)
 app.get('/api/equipments/stats', (req, res) => {
     db.get("SELECT count(*) as total, sum(case when status = 'Online' then 1 else 0 end) as online FROM equipamentos", [], (err, row) => {
         res.json(row || { total: 0, online: 0 });
     });
 });
 
-// Lista de clientes
-app.get('/api/clients', (req, res) => {
-    db.all("SELECT * FROM clientes", [], (err, rows) => res.json(rows || []));
-});
-
-// Lista de usuários (O console pediu /api/users)
-app.get('/api/users', (req, res) => {
-    db.all("SELECT id, username, role FROM users", [], (err, rows) => res.json(rows || []));
-});
-
-// Lista de equipamentos
+// Listagem de Equipamentos
 app.get('/api/equipments', (req, res) => {
     db.all("SELECT * FROM equipamentos", [], (err, rows) => res.json(rows || []));
 });
 
-// Rota de Performance Individual (evita o erro 404 de cada máquina)
-app.get('/api/equipments/:id/performance', (req, res) => {
-    res.json({ cpu_usage: "15%", ram_usage: "45%", disk_usage: "60%" });
+// Listagem de Clientes
+app.get('/api/clients', (req, res) => {
+    db.all("SELECT * FROM clientes", [], (err, rows) => res.json(rows || []));
 });
 
-// --- FINALIZAÇÃO ---
-app.get('/', (req, res) => res.json({ message: "Goldtech Inventory API is running" }));
+// Listagem de Usuários (O console pediu /api/users)
+app.get('/api/users', (req, res) => {
+    db.all("SELECT id, username, role FROM users", [], (err, rows) => res.json(rows || []));
+});
+
+// Performance Individual (Evita erro ao clicar na máquina)
+app.get('/api/equipments/:id/performance', (req, res) => {
+    res.json({ cpu_usage: "12%", ram_usage: "35%", disk_usage: "50%", temp: "45°C" });
+});
+
+// Reset de Admin
+app.post('/api/admin/reset-login', (req, res) => {
+    const hash = bcrypt.hashSync('admin', bcrypt.genSaltSync(10));
+    db.run(`UPDATE users SET password = ? WHERE username = 'admin'`, [hash], () => res.json({ message: "Reset ok" }));
+});
+
+app.get('/', (req, res) => res.json({ message: "Goldtech API Active" }));
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+app.listen(PORT, () => console.log(`Servidor Goldtech rodando!`));
