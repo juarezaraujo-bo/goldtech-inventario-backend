@@ -206,7 +206,7 @@ async function createPerformanceTicket(hostname, clientId, alertType, motivo, ac
   const configuredApiUrl = process.env.HELPDESK_API_URL || fallbackApiUrl;
   const apiUrls = configuredApiUrl === fallbackApiUrl
     ? [fallbackApiUrl]
-    : [configuredApiUrl, fallbackApiUrl];
+    : [fallbackApiUrl, configuredApiUrl];
   const apiToken = process.env.HELPDESK_API_TOKEN || '';
 
   const sampleText = samples.length
