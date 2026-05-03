@@ -138,6 +138,22 @@ const initDb = async () => {
     FOREIGN KEY (updated_by) REFERENCES users (id)
   )`);
 
+  await run(`CREATE TABLE IF NOT EXISTS knowledge_articles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    category TEXT DEFAULT 'Geral',
+    summary TEXT,
+    content TEXT NOT NULL,
+    audience TEXT DEFAULT 'interno_goldtech',
+    status TEXT DEFAULT 'rascunho',
+    created_by INTEGER,
+    updated_by INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users (id),
+    FOREIGN KEY (updated_by) REFERENCES users (id)
+  )`);
+
   await run(`CREATE TABLE IF NOT EXISTS maintenance (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     equipment_id INTEGER,
