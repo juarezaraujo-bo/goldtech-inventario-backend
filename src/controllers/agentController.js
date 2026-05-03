@@ -2,6 +2,12 @@ const { db } = require('../models/db');
 const { classifyObsolescence } = require('../utils/obsolescenceUtils');
 const crypto = require('crypto');
 
+const CPU_CRITICAL_PERCENT = Number(process.env.MONITOR_CPU_CRITICAL_PERCENT || 90);
+const MEMORY_CRITICAL_PERCENT = Number(process.env.MONITOR_MEMORY_CRITICAL_PERCENT || 90);
+const DISK_FREE_CRITICAL_PERCENT = Number(process.env.MONITOR_DISK_FREE_CRITICAL_PERCENT || 10);
+const PERSISTENT_ALERT_SAMPLES = Number(process.env.MONITOR_PERSISTENT_ALERT_SAMPLES || 3);
+const HELPDESK_SYSTEM_USER_ID = Number(process.env.HELPDESK_SYSTEM_USER_ID || 1);
+
 exports.test = (req, res) => {
   res.json({ status: 'active', message: 'Goldtech Agent API is online' });
 };
@@ -98,7 +104,7 @@ function analyzePerformanceAlerts(equipmentId, clientId, hostname, current) {
   const { cpu_usage_percent, memory_usage_percent, disk_free_percent } = current;
 
   // 1. Disco crítico — imediato
-  if (disk_free_percent <= 10) {
+  if (disk_free_percent <= DISK_FREE_CRITICAL_PERCENT) {
     maybeCreatePerformanceTicket(
       equipmentId, clientId, hostname, 'disco_critico',
       `Disco com apenas ${disk_free_percent}% livre`,
@@ -109,11 +115,11 @@ function analyzePerformanceAlerts(equipmentId, clientId, hostname, current) {
   // 2. CPU >= 90% por 3 coletas consecutivas
   db.all(
     `SELECT cpu_usage_percent FROM equipment_performance
-     WHERE equipment_id = ? ORDER BY created_at DESC LIMIT 3`,
-    [equipmentId],
+     WHERE equipment_id = ? ORDER BY created_at DESC LIMIT ?`,
+    [equipmentId, PERSISTENT_ALERT_SAMPLES],
     (err, rows) => {
-      if (err || rows.length < 3) return;
-      if (rows.every(r => r.cpu_usage_percent >= 90)) {
+      if (err || rows.length < PERSISTENT_ALERT_SAMPLES) return;
+      if (rows.every(r => r.cpu_usage_percent >= CPU_CRITICAL_PERCENT)) {
         maybeCreatePerformanceTicket(
           equipmentId, clientId, hostname, 'cpu_persistente',
           `CPU acima de 90% nas últimas 3 coletas (atual: ${cpu_usage_percent}%)`,
@@ -126,11 +132,11 @@ function analyzePerformanceAlerts(equipmentId, clientId, hostname, current) {
   // 3. RAM >= 90% por 3 coletas consecutivas
   db.all(
     `SELECT memory_usage_percent FROM equipment_performance
-     WHERE equipment_id = ? ORDER BY created_at DESC LIMIT 3`,
-    [equipmentId],
+     WHERE equipment_id = ? ORDER BY created_at DESC LIMIT ?`,
+    [equipmentId, PERSISTENT_ALERT_SAMPLES],
     (err, rows) => {
-      if (err || rows.length < 3) return;
-      if (rows.every(r => r.memory_usage_percent >= 90)) {
+      if (err || rows.length < PERSISTENT_ALERT_SAMPLES) return;
+      if (rows.every(r => r.memory_usage_percent >= MEMORY_CRITICAL_PERCENT)) {
         maybeCreatePerformanceTicket(
           equipmentId, clientId, hostname, 'ram_persistente',
           `RAM acima de 90% nas últimas 3 coletas (atual: ${memory_usage_percent}%)`,
@@ -138,6 +144,18 @@ function analyzePerformanceAlerts(equipmentId, clientId, hostname, current) {
         );
       }
     }
+  );
+}
+
+function getLastPerformanceSamples(equipmentId, callback) {
+  db.all(
+    `SELECT cpu_usage_percent, memory_usage_percent, disk_free_percent, disk_free_gb, created_at
+     FROM equipment_performance
+     WHERE equipment_id = ?
+     ORDER BY created_at DESC
+     LIMIT ?`,
+    [equipmentId, Math.max(PERSISTENT_ALERT_SAMPLES, 3)],
+    callback
   );
 }
 
@@ -157,15 +175,24 @@ function maybeCreatePerformanceTicket(equipmentId, clientId, hostname, alertType
         return;
       }
 
-      console.log(`[HELPDESK-PERF] Abrindo chamado '${alertType}' para ${hostname}...`);
-      const ticketId = await createPerformanceTicket(hostname, clientId, alertType, motivo, acao);
+      getLastPerformanceSamples(equipmentId, async (sampleErr, samples) => {
+        if (sampleErr) console.error(`[HELPDESK-PERF] Erro ao buscar historico: ${sampleErr.message}`);
 
-      db.run(
-        `INSERT INTO monitoring_helpdesk_tickets
-         (equipment_id, client_id, alert_type, helpdesk_ticket_id, status)
-         VALUES (?, ?, ?, ?, 'aberto')`,
-        [equipmentId, clientId, alertType, ticketId || null]
-      );
+        console.log(`[HELPDESK-PERF] Abrindo chamado '${alertType}' para ${hostname}...`);
+        const ticketId = await createPerformanceTicket(hostname, clientId, alertType, motivo, acao, samples || []);
+
+        if (!ticketId) {
+          console.error(`[HELPDESK-PERF] Chamado '${alertType}' nao foi criado para ${hostname}; alerta sera reavaliado na proxima coleta.`);
+          return;
+        }
+
+        db.run(
+          `INSERT INTO monitoring_helpdesk_tickets
+           (equipment_id, client_id, alert_type, helpdesk_ticket_id, status)
+           VALUES (?, ?, ?, ?, 'aberto')`,
+          [equipmentId, clientId, alertType, ticketId]
+        );
+      });
     }
   );
 }
@@ -174,14 +201,18 @@ function maybeCreatePerformanceTicket(equipmentId, clientId, hostname, alertType
  * Envia o chamado para a API do Helpdesk.
  * Retorna o ID do chamado criado ou null em falha.
  */
-async function createPerformanceTicket(hostname, clientId, alertType, motivo, acao) {
-  const apiUrl = process.env.HELPDESK_API_URL;
-  const apiToken = process.env.HELPDESK_API_TOKEN;
+async function createPerformanceTicket(hostname, clientId, alertType, motivo, acao, samples = []) {
+  const apiUrl = process.env.HELPDESK_API_URL || 'https://goldtech-api.onrender.com/api/tickets';
+  const apiToken = process.env.HELPDESK_API_TOKEN || '';
 
-  if (!apiUrl || !apiToken) {
+  if (!apiUrl) {
     console.error('[HELPDESK-PERF] HELPDESK_API_URL ou HELPDESK_API_TOKEN não configurados no .env');
     return null;
   }
+
+  const sampleText = samples.length
+    ? samples.map((s, index) => `#${index + 1} ${s.created_at}: CPU ${s.cpu_usage_percent}% | RAM ${s.memory_usage_percent}% | Disco livre ${s.disk_free_percent}% (${s.disk_free_gb}GB)`).join('\n')
+    : 'Sem historico recente disponivel.';
 
   const payload = {
     title: `[Monitoramento] ${alertType.replace(/_/g, ' ')} — ${hostname}`,
@@ -191,20 +222,23 @@ async function createPerformanceTicket(hostname, clientId, alertType, motivo, ac
       `Tipo de Alerta: ${alertType}\n` +
       `Motivo: ${motivo}\n` +
       `Ação Recomendada: ${acao}\n` +
-      `Data/Hora: ${new Date().toLocaleString('pt-BR')}`,
-    priority: 'high',
+      `Data/Hora: ${new Date().toLocaleString('pt-BR')}\n\n` +
+      `Ultimas coletas:\n${sampleText}`,
+    priority: 'High',
     category: 'Performance',
+    company_id: clientId,
     client_id: clientId,
+    opened_by_user_id: HELPDESK_SYSTEM_USER_ID,
     source: 'Goldtech Inventory Monitor'
   };
 
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiToken) headers.Authorization = `Bearer ${apiToken}`;
+
     const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiToken}`
-      },
+      headers,
       body: JSON.stringify(payload)
     });
 

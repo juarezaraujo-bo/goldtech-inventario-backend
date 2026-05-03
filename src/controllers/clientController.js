@@ -107,7 +107,9 @@ exports.getAgentPackage = (req, res) => {
     
     try {
       const zip = new AdmZip();
-      const agentDir = path.join(__dirname, '../../../agent');
+      const bundledAgentDir = path.join(__dirname, '../agent');
+      const legacyAgentDir = path.join(__dirname, '../../../agent');
+      const agentDir = fs.existsSync(bundledAgentDir) ? bundledAgentDir : legacyAgentDir;
       
       const files = [
         'windows-inventory.ps1',
@@ -124,8 +126,8 @@ exports.getAgentPackage = (req, res) => {
         // Substituições ultra-específicas para não quebrar a lógica interna dos scripts
         if (fileName.includes('windows-')) {
           // No script de coleta, alteramos as variáveis de configuração no topo
-          content = content.replace(/\$ApiUrl\s*=\s*['"][^'"]*['"]/, `$ApiUrl = "${apiUrl}/api/agent/inventory"`);
-          content = content.replace(/\$API_URL\s*=\s*['"][^'"]*['"]/, `$API_URL = "${apiUrl}/api/agent/performance"`);
+          content = content.replace(/\$ApiUrl\s*=\s*['"][^'"]*['"]/, `$ApiUrl = "${apiUrl}/api/agent/${endpoint}"`);
+          content = content.replace(/\$API_URL\s*=\s*['"][^'"]*['"]/, `$API_URL = "${apiUrl}/api/agent/${endpoint}"`);
           content = content.replace(/\$AgentToken\s*=\s*['"][^'"]*['"]/, `$AgentToken = "${agentToken}"`);
           content = content.replace(/\$AGENT_TOKEN\s*=\s*['"][^'"]*['"]/, `$AGENT_TOKEN = "${agentToken}"`);
           content = content.replace(/\$Cliente\s*=\s*['"][^'"]*['"]/, `$Cliente = "${clientName}"`);
