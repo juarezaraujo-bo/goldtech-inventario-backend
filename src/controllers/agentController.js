@@ -166,7 +166,7 @@ function getLastPerformanceSamples(equipmentId, callback) {
 function maybeCreatePerformanceTicket(equipmentId, clientId, hostname, alertType, motivo, acao) {
   db.get(
     `SELECT id FROM monitoring_helpdesk_tickets
-     WHERE equipment_id = ? AND alert_type = ? AND status = 'aberto'`,
+     WHERE equipment_id = ? AND alert_type = ? AND status = 'aberto' AND helpdesk_ticket_id IS NOT NULL`,
     [equipmentId, alertType],
     async (err, existing) => {
       if (err) return;
