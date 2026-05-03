@@ -202,13 +202,12 @@ function maybeCreatePerformanceTicket(equipmentId, clientId, hostname, alertType
  * Retorna o ID do chamado criado ou null em falha.
  */
 async function createPerformanceTicket(hostname, clientId, alertType, motivo, acao, samples = []) {
-  const apiUrl = process.env.HELPDESK_API_URL || 'https://goldtech-api.onrender.com/api/tickets';
+  const fallbackApiUrl = 'https://goldtech-api.onrender.com/api/tickets';
+  const configuredApiUrl = process.env.HELPDESK_API_URL || fallbackApiUrl;
+  const apiUrls = configuredApiUrl === fallbackApiUrl
+    ? [fallbackApiUrl]
+    : [configuredApiUrl, fallbackApiUrl];
   const apiToken = process.env.HELPDESK_API_TOKEN || '';
-
-  if (!apiUrl) {
-    console.error('[HELPDESK-PERF] HELPDESK_API_URL ou HELPDESK_API_TOKEN não configurados no .env');
-    return null;
-  }
 
   const sampleText = samples.length
     ? samples.map((s, index) => `#${index + 1} ${s.created_at}: CPU ${s.cpu_usage_percent}% | RAM ${s.memory_usage_percent}% | Disco livre ${s.disk_free_percent}% (${s.disk_free_gb}GB)`).join('\n')
@@ -232,30 +231,32 @@ async function createPerformanceTicket(hostname, clientId, alertType, motivo, ac
     source: 'Goldtech Inventory Monitor'
   };
 
-  try {
-    const headers = { 'Content-Type': 'application/json' };
-    if (apiToken) headers.Authorization = `Bearer ${apiToken}`;
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiToken) headers.Authorization = `Bearer ${apiToken}`;
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload)
-    });
+  for (const apiUrl of apiUrls) {
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
 
-    if (response.ok) {
-      const result = await response.json().catch(() => ({}));
-      const ticketId = result.id || result.ticket_id || 'gerado';
-      console.log(`[HELPDESK-PERF] Chamado criado com ID: ${ticketId}`);
-      return String(ticketId);
-    } else {
+      if (response.ok) {
+        const result = await response.json().catch(() => ({}));
+        const ticketId = result.id || result.ticket_id || 'gerado';
+        console.log(`[HELPDESK-PERF] Chamado criado com ID: ${ticketId}`);
+        return String(ticketId);
+      }
+
       const errorText = await response.text();
-      console.error(`[HELPDESK-PERF] Erro ${response.status}: ${errorText}`);
-      return null;
+      console.error(`[HELPDESK-PERF] Erro ${response.status} em ${apiUrl}: ${errorText}`);
+    } catch (error) {
+      console.error(`[HELPDESK-PERF] Falha na comunicação com ${apiUrl}: ${error.message}`);
     }
-  } catch (error) {
-    console.error(`[HELPDESK-PERF] Falha na comunicação: ${error.message}`);
-    return null;
   }
+
+  return null;
 }
 
 
