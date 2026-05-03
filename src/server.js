@@ -11,6 +11,7 @@ const equipmentRoutes = require('./routes/equipment');
 const monitoringRoutes = require('./routes/monitoring');
 const reportRoutes = require('./routes/report');
 const agentRoutes = require('./routes/agent');
+const intranetRoutes = require('./routes/intranet');
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/api/equipments', equipmentRoutes);
 app.use('/api/monitoring', monitoringRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/agent', agentRoutes);
+app.use('/api/intranet', intranetRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Rota nao encontrada' });

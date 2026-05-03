@@ -122,6 +122,22 @@ const initDb = async () => {
     FOREIGN KEY (equipment_id) REFERENCES equipments (id)
   )`);
 
+  await run(`CREATE TABLE IF NOT EXISTS intranet_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    category TEXT DEFAULT 'Geral',
+    content TEXT NOT NULL,
+    visibility TEXT DEFAULT 'interno_goldtech',
+    created_by INTEGER,
+    updated_by INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (client_id) REFERENCES clients (id),
+    FOREIGN KEY (created_by) REFERENCES users (id),
+    FOREIGN KEY (updated_by) REFERENCES users (id)
+  )`);
+
   await run(`CREATE TABLE IF NOT EXISTS maintenance (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     equipment_id INTEGER,
