@@ -102,7 +102,10 @@ exports.getAgentPackage = (req, res) => {
     if (!client) return res.status(404).json({ message: "Cliente não encontrado" });
 
     const clientName = client.name;
-    const apiUrl = process.env.PUBLIC_API_URL || `${req.protocol}://${req.get('host')}`;
+    const host = req.get('host');
+    const forwardedProto = (req.get('x-forwarded-proto') || '').split(',')[0].trim();
+    const protocol = (host || '').includes('onrender.com') ? 'https' : (forwardedProto || req.protocol);
+    const apiUrl = process.env.PUBLIC_API_URL || `${protocol}://${host}`;
     const agentToken = process.env.AGENT_TOKEN || "goldtech_agent_secure_token_2026";
     
     try {
